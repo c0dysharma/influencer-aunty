@@ -1,4 +1,5 @@
 from operator import add
+from bson import ObjectId
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 from typing import Annotated, TypedDict, Literal
@@ -28,7 +29,7 @@ open_ai_4_0_mini = init_chat_model('gpt-4o-mini')
 class ChunkMessageOutput(TypedDict):
     topic: Annotated[str, 'Topic of the conversations it is about']
     summary: Annotated[str, 'Summary of this chunk of messages']
-    message_ids: Annotated[list[int], 'List of ids for this conversations']
+    message_ids: Annotated[list[str], 'List of ids for this conversations']
     is_content_worthy: Annotated[bool,
                                  'True if we can make a social media content about this chunk or not']
 
@@ -58,7 +59,7 @@ class PostEvaluationOutput(TypedDict):
 
 
 class GeneratedChunksOutput(TypedDict, ChunkMessageOutput):
-    chunk_id: int
+    _id: str
 
 
 class JobState(TypedDict):
@@ -111,7 +112,7 @@ For each chunk, provide:
    - Would be valuable/engaging for social media audiences
    - Has substance beyond casual small talk
    - Could generate meaningful engagement (likes, comments, shares)
-   
+
    Set to False for:
    - Personal conversations (e.g., gym routines, personal questions)
    - Technical debugging or internal processes
@@ -121,8 +122,7 @@ For each chunk, provide:
             content=json.dumps(state['messages'], indent=2)
         )
     ])
-    # add a chunk_id field
-    chunks = [{"chunk_id": i, **chunk}
+    chunks = [{"_id": str(ObjectId()), **chunk}
               for i, chunk in enumerate(res['chunks'])]
     return {'chunks': chunks}
 
@@ -132,12 +132,13 @@ def prepare_jobs(state: GlobalState):
     jobs = []
 
     for chunk in state["chunks"]:
+        print(chunk)
         # if chunks are not content worthy, don't create jobs for then
         if not chunk['is_content_worthy']:
             continue
-        
+
         chunk_messages = [
-            msg for msg in state['messages'] if msg['message_id'] in chunk['message_ids']]
+            msg for msg in state['messages'] if msg['_id'] in chunk['message_ids']]
 
         for platform in ("x", "linkedin"):
             job = {
